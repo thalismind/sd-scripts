@@ -796,7 +796,12 @@ class BaseDataset(torch.utils.data.Dataset):
         frequency_for_dir = self.tag_frequency.get(dir_name, {})
         self.tag_frequency[dir_name] = frequency_for_dir
         for caption in captions:
-            for tag in caption.split(","):
+            tags = []
+            for comma_tag in caption.split(","):
+                for phrase_tag in comma_tag.split("."):
+                    tags.append(phrase_tag)
+
+            for tag in tags:
                 tag = tag.strip()
                 if tag:
                     tag = tag.lower()
