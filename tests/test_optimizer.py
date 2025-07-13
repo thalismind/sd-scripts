@@ -24,7 +24,7 @@ def test_default_get_optimizer():
         params_t = torch.tensor([1.5, 1.5])
 
         param = Parameter(params_t)
-        optimizer_name, optimizer_args, optimizer = get_optimizer(args, [param])
+        optimizer_name, optimizer_args, optimizer, weight_decay_scheduler = get_optimizer(args, [param])
         assert optimizer_name == "torch.optim.adamw.AdamW"
         assert optimizer_args == ""
         assert isinstance(optimizer, torch.optim.AdamW)
@@ -37,7 +37,7 @@ def test_get_schedulefree_optimizer():
         params_t = torch.tensor([1.5, 1.5])
 
         param = Parameter(params_t)
-        optimizer_name, optimizer_args, optimizer = get_optimizer(args, [param])
+        optimizer_name, optimizer_args, optimizer, weight_decay_scheduler = get_optimizer(args, [param])
         assert optimizer_name == "schedulefree.adamw_schedulefree.AdamWScheduleFree"
         assert optimizer_args == ""
         assert isinstance(optimizer, schedulefree.adamw_schedulefree.AdamWScheduleFree)
@@ -145,7 +145,7 @@ def test_all_supported_optimizers():
             params_t = torch.tensor([1.5, 1.5])
 
             param = Parameter(params_t)
-            optimizer_name, _, optimizer = get_optimizer(args, [param])
+            optimizer_name, _, optimizer, weight_decay_scheduler = get_optimizer(args, [param])
             assert optimizer_name == opt.get("name")
 
             instance = opt.get("instance")

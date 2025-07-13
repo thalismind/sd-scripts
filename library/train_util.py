@@ -2390,7 +2390,7 @@ class ControlNetDataset(BaseDataset):
         bucket_no_upscale: bool,
         debug_dataset: bool,
         validation_split: float,
-        validation_seed: Optional[int],        
+        validation_seed: Optional[int],
         resize_interpolation: Optional[str] = None,
     ) -> None:
         super().__init__(resolution, network_multiplier, debug_dataset, resize_interpolation)
@@ -2453,7 +2453,7 @@ class ControlNetDataset(BaseDataset):
         self.num_train_images = self.dreambooth_dataset_delegate.num_train_images
         self.num_reg_images = self.dreambooth_dataset_delegate.num_reg_images
         self.validation_split = validation_split
-        self.validation_seed = validation_seed 
+        self.validation_seed = validation_seed
         self.resize_interpolation = resize_interpolation
 
         # assert all conditioning data exists
@@ -3679,6 +3679,44 @@ def add_optimizer_arguments(parser: argparse.ArgumentParser):
         + " / 初期学習率の比率としての最小学習率を指定する、cosine with min lr と warmup decay スケジューラ で有効",
     )
 
+    # Weight Decay Scheduler arguments
+    parser.add_argument(
+        "--weight_decay_schedule",
+        action="store_true",
+        help="Enable dynamic weight decay scheduling / 動的ウェイトディケイスケジューリングを有効にする",
+    )
+    parser.add_argument(
+        "--weight_decay_start",
+        type=float,
+        default=0.1,
+        help="Initial weight decay value for scheduling / スケジューリングの初期ウェイトディケイ値",
+    )
+    parser.add_argument(
+        "--weight_decay_end",
+        type=float,
+        default=0.01,
+        help="Final weight decay value for scheduling / スケジューリングの最終ウェイトディケイ値",
+    )
+    parser.add_argument(
+        "--weight_decay_mode",
+        type=str,
+        default="linear",
+        choices=["linear", "cosine"],
+        help="Weight decay schedule mode: linear or cosine / ウェイトディケイスケジュールモード: linear または cosine",
+    )
+    parser.add_argument(
+        "--weight_decay_warmup_steps",
+        type=int,
+        default=0,
+        help="Number of warmup steps for weight decay scheduling / ウェイトディケイスケジューリングのウォームアップステップ数",
+    )
+    parser.add_argument(
+        "--weight_decay_warmup_value",
+        type=float,
+        default=0.0,
+        help="Weight decay value during warmup / ウォームアップ中のウェイトディケイ値",
+    )
+
 
 def add_training_arguments(parser: argparse.ArgumentParser, support_dreambooth: bool):
     parser.add_argument(
@@ -4734,7 +4772,7 @@ def resume_from_local_or_hf_if_specified(accelerator, args):
     accelerator.load_state(dirname)
 
 
-def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
+def get_optimizer(args, trainable_params) -> tuple[str, str, object, object]:
     # "Optimizer to use: AdamW, AdamW8bit, Lion, SGDNesterov, SGDNesterov8bit, PagedAdamW, PagedAdamW8bit, PagedAdamW32bit, Lion8bit, PagedLion8bit, AdEMAMix8bit, PagedAdEMAMix8bit, DAdaptation(DAdaptAdamPreprint), DAdaptAdaGrad, DAdaptAdam, DAdaptAdan, DAdaptAdanIP, DAdaptLion, DAdaptSGD, Adafactor"
 
     optimizer_type = args.optimizer_type
@@ -5134,7 +5172,36 @@ def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
         # make optimizer as train mode before training for schedulefree optimizer. the optimizer will be in eval mode in sampling and saving.
         optimizer.train()
 
-    return optimizer_name, optimizer_args, optimizer
+    # Handle weight decay scheduling
+    weight_decay_scheduler = None
+    if hasattr(args, 'weight_decay_schedule') and args.weight_decay_schedule:
+        try:
+            from library.weight_decay_scheduler import create_weight_decay_scheduler
+
+            # Set initial weight decay to 0.0 to let the scheduler handle it
+            for group in optimizer.param_groups:
+                if 'weight_decay' in group:
+                    group['weight_decay'] = 0.0
+
+            # Create the weight decay scheduler
+            weight_decay_scheduler = create_weight_decay_scheduler(
+                optimizer=optimizer,
+                max_steps=args.max_train_steps,
+                start_decay=args.weight_decay_start,
+                end_decay=args.weight_decay_end,
+                decay_mode=args.weight_decay_mode,
+                warmup_steps=args.weight_decay_warmup_steps,
+                warmup_decay=args.weight_decay_warmup_value,
+            )
+
+            logger.info(f"Created weight decay scheduler: {weight_decay_scheduler.get_schedule_info()}")
+
+        except ImportError as e:
+            logger.warning(f"Could not import weight decay scheduler: {e}")
+        except Exception as e:
+            logger.warning(f"Error creating weight decay scheduler: {e}")
+
+    return optimizer_name, optimizer_args, optimizer, weight_decay_scheduler
 
 
 def get_optimizer_train_eval_fn(optimizer: Optimizer, args: argparse.Namespace) -> Tuple[Callable, Callable]:
@@ -5503,11 +5570,11 @@ def load_target_model(args, weight_dtype, accelerator, unet_use_linear_projectio
 
 
 def patch_accelerator_for_fp16_training(accelerator):
-    
+
     from accelerate import DistributedType
     if accelerator.distributed_type == DistributedType.DEEPSPEED:
         return
-    
+
     org_unscale_grads = accelerator.scaler._unscale_grads_
 
     def _unscale_grads_replacer(optimizer, inv_scale, found_inf, allow_fp16):

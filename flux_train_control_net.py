@@ -372,7 +372,7 @@ def train(args):
         # prepare optimizers for each group
         optimizers = []
         for group in grouped_params:
-            _, _, optimizer = train_util.get_optimizer(args, trainable_params=[group])
+            _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params=[group])
             optimizers.append(optimizer)
         optimizer = optimizers[0]  # avoid error in the following code
 
@@ -383,7 +383,7 @@ def train(args):
         optimizer_train_fn = lambda: None  # dummy function
         optimizer_eval_fn = lambda: None  # dummy function
     else:
-        _, _, optimizer = train_util.get_optimizer(args, trainable_params=params_to_optimize)
+        _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params=params_to_optimize)
         optimizer_train_fn, optimizer_eval_fn = train_util.get_optimizer_train_eval_fn(optimizer, args)
 
     # prepare dataloader

@@ -208,7 +208,7 @@ def train(args):
     logger.info(f"trainable params count: {len(trainable_params)}")
     logger.info(f"number of trainable parameters: {sum(p.numel() for p in trainable_params if p.requires_grad)}")
 
-    _, _, optimizer = train_util.get_optimizer(args, trainable_params)
+    _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params)
 
     # dataloaderを準備する
     # DataLoaderのプロセス数：0 は persistent_workers が使えないので注意

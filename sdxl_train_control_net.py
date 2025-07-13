@@ -265,7 +265,7 @@ def train(args):
     logger.info(f"trainable params count: {len(all_params)}")
     logger.info(f"number of trainable parameters: {sum(p.numel() for p in all_params)}")
 
-    _, _, optimizer = train_util.get_optimizer(args, trainable_params)
+    _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params)
 
     # prepare dataloader
     # strategies are set here because they cannot be referenced in another process. Copy them with the dataset

@@ -71,6 +71,7 @@ class NetworkTrainer:
         maximum_norm=None,
         mean_grad_norm=None,
         mean_combined_norm=None,
+        weight_decay_scheduler=None,
     ):
         logs = {"loss/current": current_loss, "loss/average": avr_loss}
 
@@ -123,6 +124,11 @@ class NetworkTrainer:
                     )
                 if args.optimizer_type.lower().endswith("ProdigyPlusScheduleFree".lower()) and optimizer is not None:
                     logs[f"lr/d*lr/group{i}"] = optimizer.param_groups[i]["d"] * optimizer.param_groups[i]["lr"]
+
+        # Add weight decay logging
+        if weight_decay_scheduler is not None:
+            current_decay = weight_decay_scheduler.get_current_decay()
+            logs["weight_decay/current"] = current_decay
 
         return logs
 
@@ -338,7 +344,14 @@ class NetworkTrainer:
         return train_util.get_sai_model_spec(None, args, self.is_sdxl, True, False)
 
     def update_metadata(self, metadata, args):
-        pass
+        # Add weight decay scheduler information to metadata
+        if hasattr(args, 'weight_decay_schedule') and args.weight_decay_schedule:
+            metadata["ss_weight_decay_schedule"] = "enabled"
+            metadata["ss_weight_decay_start"] = str(args.weight_decay_start)
+            metadata["ss_weight_decay_end"] = str(args.weight_decay_end)
+            metadata["ss_weight_decay_mode"] = args.weight_decay_mode
+            metadata["ss_weight_decay_warmup_steps"] = str(args.weight_decay_warmup_steps)
+            metadata["ss_weight_decay_warmup_value"] = str(args.weight_decay_warmup_value)
 
     def is_text_encoder_not_needed_for_training(self, args):
         return False  # use for sample images
@@ -744,7 +757,7 @@ class NetworkTrainer:
         #             v = len(v)
         #         accelerator.print(f"trainable_params: {k} = {v}")
 
-        optimizer_name, optimizer_args, optimizer = train_util.get_optimizer(args, trainable_params)
+        optimizer_name, optimizer_args, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params)
         optimizer_train_fn, optimizer_eval_fn = train_util.get_optimizer_train_eval_fn(optimizer, args)
 
         # prepare dataloader
@@ -1432,6 +1445,13 @@ class NetworkTrainer:
 
                     optimizer.step()
                     lr_scheduler.step()
+
+                    # Step the weight decay scheduler if enabled
+                    if weight_decay_scheduler is not None:
+                        current_decay = weight_decay_scheduler.step(global_step)
+                        if global_step % 100 == 0:  # Log every 100 steps
+                            logger.info(f"Step {global_step}: weight_decay = {current_decay:.6f}")
+
                     optimizer.zero_grad(set_to_none=True)
 
                 if args.scale_weight_norms:
@@ -1503,6 +1523,7 @@ class NetworkTrainer:
                         maximum_norm,
                         mean_grad_norm,
                         mean_combined_norm,
+                        weight_decay_scheduler,
                     )
                     self.step_logging(accelerator, logs, global_step, epoch + 1)
 

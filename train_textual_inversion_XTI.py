@@ -305,7 +305,7 @@ def train(args):
     # 学習に必要なクラスを準備する
     logger.info("prepare optimizer, data loader etc.")
     trainable_params = text_encoder.get_input_embeddings().parameters()
-    _, _, optimizer = train_util.get_optimizer(args, trainable_params)
+    _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params)
 
     # dataloaderを準備する
     # DataLoaderのプロセス数：0 は persistent_workers が使えないので注意

@@ -262,7 +262,7 @@ def train(args):
 
     trainable_params = list(controlnet.parameters())
 
-    _, _, optimizer = train_util.get_optimizer(args, trainable_params)
+    _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params)
 
     # dataloaderを準備する
     # DataLoaderのプロセス数：0 は persistent_workers が使えないので注意

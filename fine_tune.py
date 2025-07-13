@@ -228,7 +228,7 @@ def train(args):
 
     # 学習に必要なクラスを準備する
     accelerator.print("prepare optimizer, data loader etc.")
-    _, _, optimizer = train_util.get_optimizer(args, trainable_params=trainable_params)
+    _, _, optimizer, weight_decay_scheduler = train_util.get_optimizer(args, trainable_params=trainable_params)
 
     # prepare dataloader
     # strategies are set here because they cannot be referenced in another process. Copy them with the dataset
